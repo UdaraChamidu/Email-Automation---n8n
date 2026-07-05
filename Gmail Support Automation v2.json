@@ -1,0 +1,981 @@
+{
+  "name": "Gmail Support Automation",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "simple": false,
+        "filters": {},
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -176,
+        112
+      ],
+      "id": "7614cd74-a0ff-4af1-8842-c65824123625",
+      "name": "Gmail Trigger",
+      "executeOnce": false,
+      "retryOnFail": false,
+      "notesInFlow": false,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "cN5QW6Hyym5HVMR3",
+          "name": "Gmail OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "b310fd62-76c3-4065-8a44-c1b5b5d0c4ad",
+              "name": "gmail_message_id",
+              "value": "={{ $json.messageId }}",
+              "type": "string"
+            },
+            {
+              "id": "15a656a3-e053-4758-9408-8a99500725bb",
+              "name": "thread_id",
+              "value": "={{ $json.threadId }}",
+              "type": "string"
+            },
+            {
+              "id": "6e91d6b1-4fd2-43c5-9587-2c051e01c391",
+              "name": "received_at",
+              "value": "={{ $json.headers.date }}",
+              "type": "string"
+            },
+            {
+              "id": "15f628c9-33dd-444f-8ecf-e5e6e6210e58",
+              "name": "raw_body",
+              "value": "={{ $json.text }}",
+              "type": "string"
+            },
+            {
+              "id": "663cabd0-2c8b-46f8-9d94-dc5ce81322d0",
+              "name": "subject",
+              "value": "={{ $json.subject }}",
+              "type": "string"
+            },
+            {
+              "id": "0932751d-0f23-4421-8805-84315a8fc916",
+              "name": "customer_email",
+              "value": "={{ $json.from.value[0].address }}",
+              "type": "string"
+            },
+            {
+              "id": "e6fa832f-e2a8-40fc-b919-3d60419a2cbf",
+              "name": "customer_name",
+              "value": "={{ $json.from.value[0].name }}",
+              "type": "string"
+            },
+            {
+              "id": "1611c98b-c4cb-49d9-980d-782d5446a0cb",
+              "name": "delivered_to",
+              "value": "={{ $json.to.value[0].address }}",
+              "type": "string"
+            },
+            {
+              "id": "f916da6c-739d-4ea2-83d4-a07bc72985e0",
+              "name": "",
+              "value": "",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        16,
+        112
+      ],
+      "id": "80ab0f41-12b3-4179-b0a5-383247e64555",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.raw_body || \"\";\n\n// Remove common reply patterns\nlet cleaned = body\n  .replace(/On .* wrote:/gs, '')\n  .replace(/From:.*$/gim, '')\n  .replace(/Sent:.*$/gim, '')\n  .replace(/To:.*$/gim, '')\n  .replace(/Subject:.*$/gim, '')\n  .replace(/Best regards[\\s\\S]*$/gim, '')\n  .replace(/Regards[\\s\\S]*$/gim, '')\n  .replace(/Thank you[\\s\\S]*$/gim, '')\n  .replace(/________________________________/g, '')\n  .trim();\n\n// Remove excessive empty lines\ncleaned = cleaned.replace(/\\n\\s*\\n/g, '\\n\\n');\n\n\n// Convert received date/time to Eastern Time\n// Use the date field that comes from Gmail/Edit Fields\nconst originalDate =\n  $json.received_at ||\n  $json.date ||\n  $json.internalDate ||\n  $json.email_date ||\n  $json.headers?.date;\n\nconst emailDate = originalDate\n  ? new Date(Number(originalDate) || originalDate)\n  : new Date();\n\nconst received_date = emailDate.toLocaleDateString(\"en-US\", {\n  timeZone: \"America/New_York\",\n  year: \"numeric\",\n  month: \"2-digit\",\n  day: \"2-digit\",\n});\n\nconst received_time = emailDate.toLocaleTimeString(\"en-US\", {\n  timeZone: \"America/New_York\",\n  hour: \"2-digit\",\n  minute: \"2-digit\",\n  second: \"2-digit\",\n  hour12: true,\n});\n\nreturn [\n  {\n    json: {\n      ...$json,\n      clean_body: cleaned,\n      received_date,\n      received_time,\n      timezone: \"America/New_York\"\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        208,
+        112
+      ],
+      "id": "e26fb370-ec26-4c02-9805-27e701c5fbaa",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4",
+          "mode": "id"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "You are an AI customer support email classifier for an e-commerce wellness/CBD company.\n\nYour task:\nAnalyze incoming emails and classify them accurately.\n\nReturn ONLY valid JSON.\nDo not explain anything.\nDo not add markdown.\nDo not add extra text.\n\nAllowed categories:\n\n* SPAM_DO_NOT_RESPOND\n* SHIPPING_ISSUE\n* DELIVERY_ISSUE\n* ORDER_ISSUE\n* LOYALTY_POINTS\n* PRODUCT_QUESTION\n* CUSTOMER_COMPLAINT\n* CUSTOMER_STISFACTION\n* OTHER\n\nPriority levels:\n\n* LOW\n* MEDIUM\n* HIGH\n\nSentiment values:\n\n* HAPPY\n* NEUTRAL\n* ANGRY\n\nClassification Rules:\n\n1. SPAM_DO_NOT_RESPOND:\n   Classify as spam if the email is:\n\n* marketing outreach\n* SEO services\n* promotional offers\n* cold sales pitches\n* newsletters\n* unsolicited vendor/manufacturer offers\n* unrelated business promotions\n* partnership solicitation not related to customer support\n* bulk outreach emails\n* irrelevant advertising\n* Special rule: if email subject is \"ATLRx \"Contact Us Page\"\" or another related, similar thing\n\n2. SHIPPING_ISSUE:\n   Shipping method problems, shipping cost issues, shipping changes, free shipping issues.\n\n3. DELIVERY_ISSUE:\n   Returned packages, missing deliveries, delayed deliveries, wrong address problems, pickup requests.\n\n4. ORDER_ISSUE:\n   Order modifications, payment problems, checkout issues, coupon issues, duplicate charges, order confirmations.\n\n5. LOYALTY_POINTS:\n   Reward points, coupons, discounts, loyalty balances, promo code problems.\n\n6. PRODUCT_QUESTION:\n   Questions about products, ingredients, usage, dosage, recommendations, effects.\n\n7. CUSTOMER_COMPLAINT:\n   Frustrated customers, repeated issues, complaints about service quality.\n\n8. CUSTOMER_SATISFACTION:\n   Happy customers, Customer thanking, Customer satisfice with the product or service\n\n9. OTHER:\n   Anything unclear or not matching the categories above.\n\nPriority Rules:\n\n* Angry/frustrated customers => HIGH\n* Delivery/order failures => MEDIUM or HIGH\n* General questions => LOW or MEDIUM\n* Spam emails => LOW\n\nHuman Escalation Rules:\nSet requires_human=true if:\n\n* legal threats\n* refund threats\n* chargebacks\n* highly angry customers\n* repeated unresolved issues\n* medical/safety concerns\n* unclear situations needing manual review\n\nConfidence Score:\nReturn a decimal number between 0.0 and 1.0.\n\nReturn this EXACT JSON structure:\n{\n\"category\": \"\",\n\"priority\": \"\",\n\"sentiment\": \"\",\n\"requires_human\": false,\n\"confidence_score\": 0.0\n}\n"
+            },
+            {
+              "content": "=Subject:\n{{$json.subject}}\n\nCustomer Email:\n{{ $json.clean_body }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {
+          "textFormat": {
+            "textOptions": {
+              "type": "json_object"
+            }
+          },
+          "temperature": 0.1
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        368,
+        272
+      ],
+      "id": "c512e513-24e8-455c-acf8-c1098405701a",
+      "name": "Message a model",
+      "credentials": {
+        "openAiApi": {
+          "id": "D61s3rrt5eeRXGuN",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        640,
+        128
+      ],
+      "id": "e13dea03-de0b-43dc-9683-7db59aaec1a9",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "jsCode": "const original = $json;\n\nconst aiData = original.output[0].content[0].text;\n\n// Remove \"Date: \"\nconst rawDate = original.received_at.replace(\"Date: \", \"\");\n\n// Convert to JS Date object\nconst parsedDate = new Date(rawDate);\n\n// Separate date and time\nconst onlyDate = parsedDate.toISOString().split(\"T\")[0];\n\nconst onlyTime = parsedDate.toTimeString().split(\" \")[0];\n\nreturn [\n  {\n    json: {\n      customer_email: original.customer_email,\n      customer_name: original.customer_name,\n      delivered_to: original.delivered_to,\n      \n      received_at: original.received_at,\n      received_date: original.received_date,\n      received_time: original.received_time,\n      timezone: original.timezone,\n      \n      subject: original.subject,\n      clean_body: original.clean_body,\n\n      category: aiData.category,\n      priority: aiData.priority,\n      sentiment: aiData.sentiment,\n      requires_human: aiData.requires_human,\n      confidence_score: aiData.confidence_score,\n\n      thread_id: original.thread_id\n      \n    }\n  }\n,];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        848,
+        128
+      ],
+      "id": "20880d49-c2a1-4987-a147-b46579fa41e9",
+      "name": "Final Structured Output"
+    },
+    {
+      "parameters": {
+        "jsCode": "const ticketId = 'TKT-' + Date.now();\n\nreturn [\n  {\n    json: {\n      ...$json,\n      ticket_id: ticketId\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1072,
+        128
+      ],
+      "id": "bc613b83-29a6-4fa2-a021-875798765533",
+      "name": "Generate Ticket ID"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4",
+          "mode": "id"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "You are a professional customer support agent for a sales-based company.\n\nYour task is to write helpful, concise, and polite customer replies.\n\nRules:\n- Be polite and professional\n- Never promise refunds or compensation\n- Never mention internal systems or AI\n- Keep response under 120–150 words\n- Always acknowledge the issue\n- Ask for missing details if needed\n- Match tone based on sentiment\n- If sentiment is ANGRY → be extra calm and apologetic\n- If SPAM → do not generate reply\n\nYou MUST use the ticket context provided.\n\nReturn ONLY the email reply text. No JSON. No formatting.\n\nSender name: ABC Company\nCustomer Email: {{ $json.customer_email }}"
+            },
+            {
+              "content": "=Category: {{$json.category}}\nPriority: {{$json.priority}}\nSentiment: {{$json.sentiment}}\n\nCustomer Name: {{$json.customer_name}}\nCustomer Email: {{$json.customer_email}}\n\nSubject: {{$json.subject}}\n\nMessage:\n{{$json.clean_body}}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        1600,
+        320
+      ],
+      "id": "621380f9-8899-44d2-b82e-8f4e64fd285f",
+      "name": "AI Reply Generator",
+      "credentials": {
+        "openAiApi": {
+          "id": "D61s3rrt5eeRXGuN",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "draft",
+        "subject": "=Re: {{$items(\"Final Structured Output\")[0].json.subject}}",
+        "message": "={{$items(\"AI Reply Generator\")[0].json.output[0].content[0].text}}",
+        "options": {
+          "threadId": "={{ $json.thread_id }}",
+          "sendTo": "={{ $json.customer_email }}"
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2128,
+        160
+      ],
+      "id": "65bbc6f5-a97c-4ebe-a1b0-9529a9b77841",
+      "name": "Create Reply Draft",
+      "webhookId": "e4a462a9-ea62-43a2-a023-4e6f08260c5c",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "cN5QW6Hyym5HVMR3",
+          "name": "Gmail OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1920,
+        160
+      ],
+      "id": "d5f1bc6b-d70f-4d30-b473-3f5dc0ff26b6",
+      "name": "Merge1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "dfc34a49-fb7a-4048-9dfa-c30becc0c296",
+              "leftValue": "={{ $json.category }}",
+              "rightValue": "=SPAM_DO_NOT_RESPOND",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "3dcc05ac-e698-4163-a285-8f6fee9f9202",
+              "leftValue": "={{ $json.delivered_to }}",
+              "rightValue": "chamiduudara321@gmail.com",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1344,
+        304
+      ],
+      "id": "b4ffd1b4-a053-4046-8068-5ca644989057",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "dfc34a49-fb7a-4048-9dfa-c30becc0c296",
+              "leftValue": "={{ $json.category }}",
+              "rightValue": "=SPAM_DO_NOT_RESPOND",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "6ee66584-6023-4a2e-a761-61ac01f0f9b6",
+              "leftValue": "={{ $json.delivered_to }}",
+              "rightValue": "chamiduudara321@gmail.com",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1344,
+        128
+      ],
+      "id": "f66d03cd-835a-4752-921a-127d3e2da326",
+      "name": "check spam"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1Kv-KswV2FqylQyctRy80c--pONM393B3RJKpVYrFp0I",
+          "mode": "list",
+          "cachedResultName": "Email_Automation",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Kv-KswV2FqylQyctRy80c--pONM393B3RJKpVYrFp0I/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 810609917,
+          "mode": "list",
+          "cachedResultName": "Raw_Data",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Kv-KswV2FqylQyctRy80c--pONM393B3RJKpVYrFp0I/edit#gid=810609917"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "response_status": "DRAFT_CREATED",
+            "requires_human": "={{ $('Merge1').item.json.requires_human }}",
+            "confidence_score": "={{ $('Merge1').item.json.confidence_score }}",
+            "sentiment": "={{ $('Merge1').item.json.sentiment }}",
+            "priority": "={{ $('Merge1').item.json.priority }}",
+            "category": "={{ $('Merge1').item.json.category }}",
+            "ai_reply": "={{ $('Merge1').item.json.output[0].content[0].text }}",
+            "clean_body": "={{ $('Merge1').item.json.clean_body }}",
+            "subject": "={{ $('Merge1').item.json.subject }}",
+            "customer_name": "={{ $('Merge1').item.json.customer_name }}",
+            "customer_email": "={{ $('Merge1').item.json.customer_email }}",
+            "recieved_time": "={{ $('Merge1').item.json.received_time }}",
+            "recieved_date": "={{ $('Merge1').item.json.received_date }}",
+            "thread_id": "={{ $('Merge1').item.json.thread_id }}",
+            "ticket_id": "={{ $('Merge1').item.json.ticket_id }}",
+            "draft_created_time": "={{ $now.setZone('America/New_York').toFormat('yyyy-MM-dd HH:mm:ss') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "ticket_id",
+              "displayName": "ticket_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "thread_id",
+              "displayName": "thread_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "recieved_date",
+              "displayName": "recieved_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "recieved_time",
+              "displayName": "recieved_time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "customer_email",
+              "displayName": "customer_email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "customer_name",
+              "displayName": "customer_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "subject",
+              "displayName": "subject",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "clean_body",
+              "displayName": "clean_body",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ai_reply",
+              "displayName": "ai_reply",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "category",
+              "displayName": "category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "priority",
+              "displayName": "priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "sentiment",
+              "displayName": "sentiment",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "confidence_score",
+              "displayName": "confidence_score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "requires_human",
+              "displayName": "requires_human",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "draft_created_time",
+              "displayName": "draft_created_time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "response_status",
+              "displayName": "response_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "replied_time",
+              "displayName": "replied_time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "response_time_duration",
+              "displayName": "response_time_duration",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2336,
+        160
+      ],
+      "id": "4b262a86-8b1d-4c58-b9c5-a9df4a273d34",
+      "name": "Save Ticket",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "rItj4tp1McOJoGXi",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1Kv-KswV2FqylQyctRy80c--pONM393B3RJKpVYrFp0I",
+          "mode": "list",
+          "cachedResultName": "Email_Automation",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Kv-KswV2FqylQyctRy80c--pONM393B3RJKpVYrFp0I/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 197282157,
+          "mode": "list",
+          "cachedResultName": "Raw_Data",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Kv-KswV2FqylQyctRy80c--pONM393B3RJKpVYrFp0I/edit#gid=197282157"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "ticket_id": "={{ $json.ticket_id }}",
+            "customer_name": "={{ $json.customer_name }}",
+            "customer_email": "={{ $json.customer_email }}",
+            "subject": "={{ $json.subject }}",
+            "clean_body": "={{ $json.clean_body }}",
+            "priority": "={{ $json.priority }}",
+            "category": "={{ $json.category }}",
+            "sentiment": "={{ $json.sentiment }}",
+            "confidence_score": "={{ $json.confidence_score }}",
+            "requires_human": "={{ $json.requires_human }}",
+            "thread_id": "={{ $json.thread_id }}",
+            "draft_created_time": "=",
+            "ai_reply": "=",
+            "recieved_date": "={{ $json.received_date }}",
+            "recieved_time": "={{ $json.received_time }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "ticket_id",
+              "displayName": "ticket_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "thread_id",
+              "displayName": "thread_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "recieved_date",
+              "displayName": "recieved_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "recieved_time",
+              "displayName": "recieved_time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "customer_email",
+              "displayName": "customer_email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "customer_name",
+              "displayName": "customer_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "subject",
+              "displayName": "subject",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "clean_body",
+              "displayName": "clean_body",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ai_reply",
+              "displayName": "ai_reply",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "category",
+              "displayName": "category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "priority",
+              "displayName": "priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "sentiment",
+              "displayName": "sentiment",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "confidence_score",
+              "displayName": "confidence_score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "requires_human",
+              "displayName": "requires_human",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "draft_created_time",
+              "displayName": "draft_created_time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "response_status",
+              "displayName": "response_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "replied_time",
+              "displayName": "replied_time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "response_time_duration",
+              "displayName": "response_time_duration",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1712,
+        16
+      ],
+      "id": "8ac93775-b03e-4752-a7ff-9899daf1e9b6",
+      "name": "Save Ticket for spam",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "rItj4tp1McOJoGXi",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Gmail Trigger": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Final Structured Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Final Structured Output": {
+      "main": [
+        [
+          {
+            "node": "Generate Ticket ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Ticket ID": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "check spam",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Reply Generator": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Create Reply Draft": {
+      "main": [
+        [
+          {
+            "node": "Save Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge1": {
+      "main": [
+        [
+          {
+            "node": "Create Reply Draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [],
+        [
+          {
+            "node": "AI Reply Generator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "check spam": {
+      "main": [
+        [
+          {
+            "node": "Save Ticket for spam",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "f553230a-0386-47cb-8fd0-f5235bc0c25f",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "b8fefe3995e6c39f610041ea9ffea82bc1cf204348912e47bed13b12370c9b2a"
+  },
+  "id": "DuOE1hAbooNekSBS",
+  "tags": []
+}
