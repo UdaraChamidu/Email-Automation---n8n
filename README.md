@@ -1,2 +1,3 @@
-<img width="1250" height="312" alt="Screenshot 2026-06-28 143347" src="https://github.com/user-attachments/assets/e96c5520-f520-47e5-8ef2-3bb1dd7af8a9" />
+<img width="1222" height="283" alt="image" src="https://github.com/user-attachments/assets/96a92167-454d-48de-8b52-8e3a1f741713" />
+
 # Email-Automation---n8n
